@@ -2,7 +2,12 @@
 
 A simple 2D Pong game built with Python and Pygame Community Edition.
 
-Features:
+This project follows the Model-View-Controller architecture and basic object-oriented design principles:
+- Model: game state and ball/paddle logic
+- View: rendering with Pygame
+- Controller: input handling and main game loop
+
+## Features
 - 1-player mode against a CPU opponent
 - 2-player local mode on one keyboard
 - Score tracking
@@ -15,7 +20,7 @@ Features:
 
 ## Install
 ```bash
-python -m pip install pygame
+python -m pip install -r requirements.txt
 ```
 
 ## Run
