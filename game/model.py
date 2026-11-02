@@ -41,7 +41,7 @@ class PongModel:
     def __init__(self, progression_service: ProgressionService | None = None) -> None:
         self.progression_service = progression_service or ProgressionService()
         self.state = GameState.MENU.value
-        self.game_mode = None
+        self.game_mode: str | GameMode | None = None
         self.player_one_score = 0
         self.player_two_score = 0
         self.winner_name = None
@@ -76,6 +76,22 @@ class PongModel:
         self.ball = Ball(SCREEN_WIDTH // 2 - BALL_SIZE // 2, SCREEN_HEIGHT // 2 - BALL_SIZE // 2)
         self.apply_selected_color_to_player_paddle()
 
+    def _mode_value(self, mode: str | GameMode | None) -> str | None:
+        """Normalize a mode to a consistent string value for comparisons."""
+        if mode is None:
+            return None
+        if isinstance(mode, GameMode):
+            return mode.value
+        return mode
+
+    def _is_single_player_mode(self) -> bool:
+        """Return True when the active match is in single-player mode."""
+        return self._mode_value(self.game_mode) == GameMode.SINGLE_PLAYER.value
+
+    def _is_two_player_mode(self) -> bool:
+        """Return True when the active match is in two-player mode."""
+        return self._mode_value(self.game_mode) == GameMode.TWO_PLAYER.value
+
     def get_unlocked_color_names(self) -> list[str]:
         """Return the unlocked colors preserving the order defined in the palette."""
         ordered_colors = []
@@ -108,7 +124,7 @@ class PongModel:
 
     def start_game(self, mode: str | GameMode) -> None:
         """Initialize a fresh round in the requested mode."""
-        self.game_mode = mode.value if isinstance(mode, GameMode) else mode
+        self.game_mode = GameMode(mode) if isinstance(mode, str) else mode
         self.state = GameState.PLAYING.value
         self.player_one_score = 0
         self.player_two_score = 0
@@ -126,14 +142,14 @@ class PongModel:
 
     def on_point_conceded(self) -> None:
         """Reset the survival timer when a player loses a point in single-player mode."""
-        if self.game_mode == GameMode.SINGLE_PLAYER.value:
+        if self._is_single_player_mode():
             self.current_survival_time = 0.0
 
     def handle_score(self) -> None:
         """Check for a winner and reset the ball for the next serve."""
         if self.player_one_score >= self.WINNING_SCORE or self.player_two_score >= self.WINNING_SCORE:
             self.state = GameState.GAME_OVER.value
-            if self.game_mode == GameMode.SINGLE_PLAYER.value:
+            if self._is_single_player_mode():
                 self.winner_name = "Player 1" if self.player_one_score > self.player_two_score else "CPU"
             else:
                 self.winner_name = "Player 1" if self.player_one_score > self.player_two_score else "Player 2"
@@ -156,16 +172,16 @@ class PongModel:
         self.update_survival_progress(delta_time)
         self.move_left_paddle(key_state, delta_time)
 
-        if self.game_mode == GameMode.SINGLE_PLAYER.value:
+        if self._is_single_player_mode():
             self.update_cpu_paddle(delta_time)
-        elif self.game_mode == GameMode.TWO_PLAYER.value:
+        elif self._is_two_player_mode():
             self.move_right_paddle(key_state, delta_time)
 
         self.ball.update(delta_time, self.left_paddle, self.right_paddle, self)
 
     def update_survival_progress(self, delta_time: float) -> None:
         """Track survival time for single-player mode and update unlocked content."""
-        if self.game_mode != GameMode.SINGLE_PLAYER.value:
+        if not self._is_single_player_mode():
             return
 
         self.current_survival_time += delta_time

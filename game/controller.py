@@ -34,21 +34,24 @@ class PongController:
             if event.type != pygame.KEYDOWN:
                 continue
 
+            # Escape should always return to the menu and never leave the game in an
+            # inconsistent state while a match is active.
             if event.key == pygame.K_ESCAPE:
                 if self.model.state in (GameState.PLAYING.value, GameState.PAUSED.value, GameState.GAME_OVER.value):
                     self.model.return_to_menu()
                 elif self.model.state == GameState.MENU.value:
                     return False
 
+            # Pause is toggled with P while the game is running or paused.
             if event.key == pygame.K_p:
                 if self.model.state in (GameState.PLAYING.value, GameState.PAUSED.value):
                     self.model.toggle_pause()
 
             if self.model.state == GameState.MENU.value:
                 if event.key == pygame.K_1:
-                    self.model.start_game(GameMode.SINGLE_PLAYER.value)
+                    self.model.start_game(GameMode.SINGLE_PLAYER)
                 elif event.key == pygame.K_2:
-                    self.model.start_game(GameMode.TWO_PLAYER.value)
+                    self.model.start_game(GameMode.TWO_PLAYER)
                 elif event.key == pygame.K_c:
                     self.model.cycle_selected_color()
                 elif event.key == pygame.K_q:
@@ -58,9 +61,9 @@ class PongController:
                 if event.key in (pygame.K_RETURN, pygame.K_SPACE):
                     self.model.state = GameState.MENU.value
                 elif event.key == pygame.K_1:
-                    self.model.start_game(GameMode.SINGLE_PLAYER.value)
+                    self.model.start_game(GameMode.SINGLE_PLAYER)
                 elif event.key == pygame.K_2:
-                    self.model.start_game(GameMode.TWO_PLAYER.value)
+                    self.model.start_game(GameMode.TWO_PLAYER)
 
         return True
 
