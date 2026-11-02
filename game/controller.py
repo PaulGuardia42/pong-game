@@ -48,7 +48,7 @@ class PongView:
 
         # Switch UI based on current game state.
         if model.state == "menu":
-            self.draw_menu()
+            self.draw_menu(model)
         elif model.state == "game_over":
             self.draw_game_over(model)
 
@@ -60,23 +60,38 @@ class PongView:
         """Draw the ball using its rectangle. A circle is used for the classic Pong feel."""
         pygame.draw.ellipse(self.screen, WHITE, ball.rect)
 
-    def draw_menu(self) -> None:
-        """Show the start screen with mode selection instructions."""
+    def draw_menu(self, model) -> None:
+        """Show the start screen with mode selection instructions and paddle customization."""
         title = self.font.render("PONG", True, WHITE)
-        self.screen.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, WINDOW_HEIGHT // 2 - 110))
+        self.screen.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, WINDOW_HEIGHT // 2 - 160))
+
+        high_score = self.small_font.render(f"Best survival: {model.high_score:.1f}s", True, ACCENT)
+        self.screen.blit(high_score, (WINDOW_WIDTH // 2 - high_score.get_width() // 2, HEIGHT // 2 - 90))
+
+        color_name = model.selected_color_name.title()
+        color_text = self.small_font.render(f"Selected paddle: {color_name}", True, WHITE)
+        self.screen.blit(color_text, (WINDOW_WIDTH // 2 - color_text.get_width() // 2, WINDOW_HEIGHT // 2 - 50))
 
         option1 = self.small_font.render("Press 1 for 1 Player (vs CPU)", True, ACCENT)
         option2 = self.small_font.render("Press 2 for 2 Players (same keyboard)", True, ACCENT)
+        option3 = self.small_font.render("Press C to cycle unlocked paddle colors", True, ACCENT)
         prompt = self.small_font.render("Esc to quit", True, WHITE)
 
-        self.screen.blit(option1, (WINDOW_WIDTH // 2 - option1.get_width() // 2, WINDOW_HEIGHT // 2 - 10))
+        self.screen.blit(option1, (WINDOW_WIDTH // 2 - option1.get_width() // 2, WINDOW_HEIGHT // 2 + 0))
         self.screen.blit(option2, (WINDOW_WIDTH // 2 - option2.get_width() // 2, WINDOW_HEIGHT // 2 + 40))
-        self.screen.blit(prompt, (WINDOW_WIDTH // 2 - prompt.get_width() // 2, WINDOW_HEIGHT // 2 + 90))
+        self.screen.blit(option3, (WINDOW_WIDTH // 2 - option3.get_width() // 2, WINDOW_HEIGHT // 2 + 80))
+        self.screen.blit(prompt, (WINDOW_WIDTH // 2 - prompt.get_width() // 2, WINDOW_HEIGHT // 2 + 120))
+
+        unlocked = ", ".join(name.title() for name in model.get_unlocked_color_names())
+        unlocked_text = self.tiny_font.render(f"Unlocked: {unlocked}", True, WHITE)
+        self.screen.blit(unlocked_text, (WINDOW_WIDTH // 2 - unlocked_text.get_width() // 2, WINDOW_HEIGHT // 2 + 160))
 
     def draw_game_over(self, model) -> None:
         """Display the winner and offer a quick way to return to the menu."""
         if model.mode == "single":
             message = "CPU WINS" if model.winner == "CPU" else "YOU WIN"
+            survival = self.small_font.render(f"Survival time: {model.current_survival_time:.1f}s", True, ACCENT)
+            self.screen.blit(survival, (WINDOW_WIDTH // 2 - survival.get_width() // 2, WINDOW_HEIGHT // 2 + 10))
         else:
             message = f"{model.winner} WINS"
 
@@ -84,7 +99,7 @@ class PongView:
         self.screen.blit(winner_text, (WINDOW_WIDTH // 2 - winner_text.get_width() // 2, WINDOW_HEIGHT // 2 - 60))
 
         prompt = self.small_font.render("Press Enter or Space to return to menu", True, ACCENT)
-        self.screen.blit(prompt, (WINDOW_WIDTH // 2 - prompt.get_width() // 2, WINDOW_HEIGHT // 2 + 30))
+        self.screen.blit(prompt, (WINDOW_WIDTH // 2 - prompt.get_width() // 2, WINDOW_HEIGHT // 2 + 60))
 
         controls = self.tiny_font.render("1 = 1 Player, 2 = 2 Players", True, WHITE)
-        self.screen.blit(controls, (WINDOW_WIDTH // 2 - controls.get_width() // 2, WINDOW_HEIGHT // 2 + 75))
+        self.screen.blit(controls, (WINDOW_WIDTH // 2 - controls.get_width() // 2, WINDOW_HEIGHT // 2 + 100))
