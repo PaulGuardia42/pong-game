@@ -1,12 +1,8 @@
-"""Save-load service for persistent player progression.
+"""Save/load service for the player's persistent progression.
 
-This service centralizes all disk I/O for the player's saved information, including:
-- best survival score
-- unlocked paddle colors
-- selected paddle color
-
-Keeping save logic in a dedicated service reduces responsibility in the model and
-makes the code more reusable and testable.
+This service isolates disk I/O from the rest of the game logic. That separation
+makes the model easier to reason about, and it makes testing much easier because
+progression logic can be validated without interacting with real files.
 """
 
 import json
@@ -16,14 +12,14 @@ from .config import DEFAULT_PROGRESS_PATH, PADDLE_UNLOCKS
 
 
 class ProgressionService:
-    """Handles loading and saving the player's persistent progression."""
+    """Keeps track of the player's unlocked content and best survival time."""
 
     def __init__(self, save_path: Path | None = None) -> None:
         self.save_path = save_path or DEFAULT_PROGRESS_PATH
         self.save_path.parent.mkdir(parents=True, exist_ok=True)
 
     def load_progress(self) -> dict:
-        """Load the saved progress dictionary from disk."""
+        """Load the saved JSON payload from disk, returning empty defaults if absent."""
         try:
             with self.save_path.open("r", encoding="utf-8") as save_file:
                 return json.load(save_file)
@@ -31,7 +27,7 @@ class ProgressionService:
             return {}
 
     def save_progress(self, high_score: float, unlocked_colors: set[str], selected_color: str) -> None:
-        """Persist the player's progress to disk."""
+        """Persist progression data to disk as a human-readable JSON file."""
         payload = {
             "high_score": round(high_score, 1),
             "unlocked_colors": sorted(unlocked_colors),
@@ -42,7 +38,7 @@ class ProgressionService:
             json.dump(payload, save_file, indent=2)
 
     def refresh_unlocks(self, high_score: float) -> set[str]:
-        """Unlock paddle colors based on the player's best survival score."""
+        """Recompute unlocked colors for the given survival-time score."""
         unlocked_colors = {"white"}
         for color_name, unlock_threshold in PADDLE_UNLOCKS.items():
             if high_score >= unlock_threshold:

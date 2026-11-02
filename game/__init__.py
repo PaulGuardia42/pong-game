@@ -1,6 +1,7 @@
 """Package initializer for the game package.
 
-This file exists so the game modules can be imported cleanly as a package.
+This file makes the package import cleanly and exposes the public classes needed
+by the rest of the application and by tests.
 """
 
 from .config import GameMode, GameState

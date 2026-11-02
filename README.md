@@ -3,21 +3,21 @@
 A simple 2D Pong game built with Python and Pygame.
 
 ## Overview
-This project is a small Pong game written using the Model-View-Controller (MVC) pattern. The code is organized so the rules of the game live in the model layer, rendering lives in the view layer, and user input and loop orchestration live in the controller layer.
+This project follows the Model-View-Controller (MVC) pattern to separate core
+rules, rendering, and user interaction. The app also tracks progression between
+runs using a local JSON save file stored in the OS-specific application data directory.
 
-The application also includes a lightweight persistent progression system that stores the player's best survival score and unlocked paddle colors.
+## Architecture summary
+The project is organized in layers so each concern has a clear home:
 
-## Architecture
-The app is intentionally separated into layers so it is easier to maintain and debug.
+- Model: game rules, scoring, CPU logic, pause behavior, and survival tracking
+- View: rendering to the screen and UI overlays
+- Controller: keyboard input, event routing, and the game loop
+- Config: constants and enums used across the app
+- Entities: Paddle and Ball game objects
+- Progression service: save and load logic for persistent player progress
 
-- Model: game rules, score tracking, CPU logic, save/load behavior coordination
-- View: rendering to the screen
-- Controller: keyboard input, events, and the main game loop
-- Config: shared constants and enums
-- Entities: paddle and ball game objects
-- Progression service: persistent save/load functionality
-
-## Project Structure
+## Project structure
 ```text
 pong-game/
 ├── README.md
@@ -31,82 +31,92 @@ pong-game/
 │   ├── model.py
 │   ├── progression_service.py
 │   └── view.py
+├── tests/
+│   ├── __init__.py
+│   ├── test_model.py
+│   └── test_progression_service.py
 └── .gitignore
 ```
 
 ## What each file does
 
 ### pong_game.py
-Entry point for the game. This is the small script that creates the controller and starts the game loop.
+The application entry point. This file creates a PongController instance and
+starts the game loop.
 
 ### game/config.py
-This file contains all shared constants, enums, and app configuration values, including:
-- screen dimensions
-- paddle sizes
-- ball size
-- game modes and states
-- available paddle color definitions
-- progression unlock thresholds
-- default save path
+A central configuration module. It defines:
+- screen size
+- paddle and ball dimensions
+- colors and unlock thresholds
+- app save path
+- game mode and state enums
 
-This file is the primary place to adjust gameplay tuning values.
+This is the first place to update if you want to adjust tuning values or add new
+rules or color unlocks.
 
 ### game/entities.py
-Contains the domain objects used by the model:
+Defines the physical game objects used by the model:
 - Paddle
 - Ball
 
-These classes represent the physical entities in the game, including position, movement, collisions, and rebound behavior.
+These classes handle movement, wall collision, ball rebounds, and simple physics.
 
 ### game/progression_service.py
-Handles the persistent player progress. It is responsible for:
-- opening and reading the save file
-- writing updated progression data
-- converting a high score into unlocked paddle colors
-- ensuring the save data is valid enough to fall back safely on startup
+Encapsulates disk I/O for saved progress. It keeps the responsibilities of reading
+and writing progress separate from the gameplay model so the game logic stays cleaner.
 
 ### game/model.py
-This is the main gameplay model. It owns:
-- current state of the game
-- current mode (single-player or two-player)
-- player score and winner logic
-- CPU movement logic
-- ball reset and serve logic
-- survival time tracking
-- applying selected paddle colors
-- progress updates when a new high score is reached
+The core model layer. It is responsible for:
+- game state transitions
+- score management
+- single-player and two-player rules
+- CPU movement
+- survival tracking
+- pause toggling
+- selected paddle color and progression updates
 
-This file contains the core rules of the Pong game.
+This is the primary place for gameplay logic.
 
 ### game/controller.py
-This file is the application controller. It does the following:
-- listens for keyboard input and quit events
-- starts new games
-- handles menu navigation
-- updates the model on each frame
-- coordinates the view render pass
+The controller layer. It receives player input, handles events, and triggers model
+updates and view renders. It coordinates the application lifecycle.
 
 ### game/view.py
-This is the rendering layer. It draws:
-- the score panel
-- paddles
-- ball
-- center divider
-- start menu
-- game-over screen
-
-The view should not contain gameplay rules or state mutation logic.
+The view layer. It renders the score, paddles, ball, menu, pause overlay, and
+end-of-round screen. It contains no game logic.
 
 ### game/__init__.py
-Package init file for the game package.
+Package initializer that makes the game modules import cleanly and exposes the main public classes.
 
-## Gameplay features
-- Single-player CPU mode
-- Local two-player mode using a shared keyboard
-- Win condition at 7 points
-- Survival high score measured in seconds without conceding a point
-- Unlockable paddle colors driven by progression thresholds
-- Persistent save data stored in the OS-specific application data directory
+### tests/test_model.py
+Unit tests for the model layer, including:
+- start-game behavior
+- pause toggling
+- color cycling
+- score reset and game state transitions
+
+### tests/test_progression_service.py
+Unit tests for the progression service, including:
+- reading missing save files safely
+- writing and loading JSON progress data
+- unlock progression thresholds
+
+## Controls
+- W / S: move the left paddle
+- Up / Down: move the right paddle in two-player mode
+- 1: start single-player mode
+- 2: start two-player mode
+- C: cycle unlocked paddle colors in the menu
+- P: pause or resume a running match
+- Esc: quit from the menu or return to the menu from a game
+- Enter / Space: continue from the game-over screen
+
+## Paused gameplay
+The game now includes a pause overlay that appears while the match is in progress.
+When paused, the player can:
+- press P again to resume
+- press Esc to return to the main menu
 
 ## Running the game
 Install dependencies:
@@ -115,49 +125,46 @@ Install dependencies:
 python -m pip install -r requirements.txt
 ```
 
-Then run:
+Then start the game:
 
 ```bash
 python pong_game.py
 ```
 
-## Controls
-- W / S: move left paddle
-- Up / Down: move right paddle in two-player mode
-- 1: start single-player mode
-- 2: start two-player mode
-- C: cycle unlocked colors from the main menu
-- Esc: quit the game or return to menu
-- Enter / Space: start a new match from the game-over screen
+## Running tests
+The project uses Python's built-in unittest framework, so no external test dependency is needed.
+
+Run the test suite with:
+
+```bash
+python -m unittest discover tests
+```
 
 ## Progress persistence
-The game stores player progress in a JSON file under the operating system's user data directory so it persists across runs:
+The game stores player progression using a JSON file in the user's OS app-data directory.
 
 - Windows: %APPDATA%\pong-game\pong_progress.json
 - macOS: ~/Library/Application Support/pong-game/pong_progress.json
 - Linux: ~/.local/share/pong-game/pong_progress.json
 
-This stores:
+The saved file includes:
 - best survival time
 - unlocked paddle colors
 - selected paddle color
 
 ## Development notes
-This project is deliberately organized so a developer can work on one layer without disturbing unrelated logic:
+This project is intentionally structured so a new developer can work on a single concern without affecting unrelated logic.
 
 - adjust game rules in game/model.py
 - adjust rendering in game/view.py
-- adjust input handling in game/controller.py
-- adjust tuning values in game/config.py
+- adjust event handling in game/controller.py
+- adjust constants in game/config.py
 - adjust save behavior in game/progression_service.py
 
-Keeping the concerns separated makes debugging and testing much easier.
-
-## Future improvements
-Possible next steps for this project include:
-- adding automated tests for scoring and progression
-- adding sound effects and music
-- implementing a pause menu
-- adding richer CPU difficulty levels
-- introducing unlock notifications and a progression screen
-- extracting the app into a more formal package layout if the game grows further
+## Suggested future enhancements
+- add sound effects and music
+- create a richer pause menu with resume, restart, and quit buttons
+- add a difficulty selector for CPU mode
+- add more unit tests for gameplay edge cases
+- add a start screen with instructions and a settings panel
+- support localization for text strings

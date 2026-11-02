@@ -1,7 +1,8 @@
-"""The Pong game model.
+"""The main Pong game model.
 
-This module contains the central game logic and rules. It owns the game state,
-score, paddle positions, CPU behavior, and progression updates.
+This module owns the gameplay rules, score tracking, pause state, CPU behavior,
+and progression updates. It is intentionally free of rendering and input concerns
+so it can be tested and evolved independently from the screen layer.
 """
 
 import random
@@ -23,15 +24,17 @@ from .progression_service import ProgressionService
 
 
 def center_paddle_y() -> float:
+    """Return the Y position that centers a paddle vertically on screen."""
     return SCREEN_HEIGHT / 2 - PADDLE_HEIGHT / 2
 
 
 def random_launch_direction() -> int:
+    """Return a random sign for the opening serve."""
     return random.choice([-1, 1])
 
 
 class PongModel:
-    """Stores the state and gameplay rules for a single game session."""
+    """Stores the current game session and enforces game rules."""
 
     WINNING_SCORE = 7
 
@@ -74,6 +77,7 @@ class PongModel:
         self.apply_selected_color_to_player_paddle()
 
     def get_unlocked_color_names(self) -> list[str]:
+        """Return the unlocked colors preserving the order defined in the palette."""
         ordered_colors = []
         for color_name in PADDLE_COLORS:
             if color_name in self.unlocked_colors:
@@ -81,11 +85,13 @@ class PongModel:
         return ordered_colors
 
     def apply_selected_color_to_player_paddle(self) -> None:
+        """Apply the currently selected color to the player's paddle."""
         if self.selected_color_name not in self.unlocked_colors:
             self.selected_color_name = "white"
         self.left_paddle.color = PADDLE_COLORS[self.selected_color_name]
 
     def cycle_selected_color(self, step: int = 1) -> None:
+        """Move to the next unlocked paddle color and persist it."""
         unlocked_colors = self.get_unlocked_color_names()
         if not unlocked_colors:
             return
@@ -101,6 +107,7 @@ class PongModel:
         )
 
     def start_game(self, mode: str | GameMode) -> None:
+        """Initialize a fresh round in the requested mode."""
         self.game_mode = mode.value if isinstance(mode, GameMode) else mode
         self.state = GameState.PLAYING.value
         self.player_one_score = 0
@@ -113,14 +120,17 @@ class PongModel:
         self.ball.reset(random_launch_direction())
 
     def reset_paddles_to_center(self) -> None:
+        """Reset both paddles to the center of the court before play resumes."""
         self.left_paddle.reset_to_center()
         self.right_paddle.reset_to_center()
 
     def on_point_conceded(self) -> None:
+        """Reset the survival timer when a player loses a point in single-player mode."""
         if self.game_mode == GameMode.SINGLE_PLAYER.value:
             self.current_survival_time = 0.0
 
     def handle_score(self) -> None:
+        """Check for a winner and reset the ball for the next serve."""
         if self.player_one_score >= self.WINNING_SCORE or self.player_two_score >= self.WINNING_SCORE:
             self.state = GameState.GAME_OVER.value
             if self.game_mode == GameMode.SINGLE_PLAYER.value:
@@ -132,12 +142,14 @@ class PongModel:
         self.reset_ball_for_next_point()
 
     def reset_ball_for_next_point(self) -> None:
+        """Serve the ball toward the player who did not just concede the point."""
         if self.player_one_score > self.player_two_score:
             self.ball.reset(1)
         else:
             self.ball.reset(-1)
 
     def update(self, delta_time: float, key_state: pygame.key.ScancodeWrapper) -> None:
+        """Advance the game by a single frame using the keyboard state."""
         if self.state != GameState.PLAYING.value:
             return
 
@@ -152,6 +164,7 @@ class PongModel:
         self.ball.update(delta_time, self.left_paddle, self.right_paddle, self)
 
     def update_survival_progress(self, delta_time: float) -> None:
+        """Track survival time for single-player mode and update unlocked content."""
         if self.game_mode != GameMode.SINGLE_PLAYER.value:
             return
 
@@ -168,6 +181,7 @@ class PongModel:
             )
 
     def move_left_paddle(self, key_state: pygame.key.ScancodeWrapper, delta_time: float) -> None:
+        """Move the left paddle using the W and S keys."""
         move_direction = 0
         if key_state[pygame.K_w]:
             move_direction -= 1
@@ -178,6 +192,7 @@ class PongModel:
         self.left_paddle.clamp()
 
     def move_right_paddle(self, key_state: pygame.key.ScancodeWrapper, delta_time: float) -> None:
+        """Move the right paddle using the arrow keys for local multiplayer."""
         move_direction = 0
         if key_state[pygame.K_UP]:
             move_direction -= 1
@@ -188,6 +203,7 @@ class PongModel:
         self.right_paddle.clamp()
 
     def update_cpu_paddle(self, delta_time: float) -> None:
+        """Move the CPU paddle toward the ball to give a basic challenge."""
         target_y = self.ball.rect.centery - self.right_paddle.rect.height / 2
 
         if self.ball.rect.x > SCREEN_WIDTH * 0.35:
@@ -197,3 +213,15 @@ class PongModel:
                 self.right_paddle.move(-1, delta_time)
 
         self.right_paddle.clamp()
+
+    def toggle_pause(self) -> None:
+        """Toggle the game between playing and paused states."""
+        if self.state == GameState.PLAYING.value:
+            self.state = GameState.PAUSED.value
+        elif self.state == GameState.PAUSED.value:
+            self.state = GameState.PLAYING.value
+
+    def return_to_menu(self) -> None:
+        """Return to the menu and clear the active match mode."""
+        self.state = GameState.MENU.value
+        self.game_mode = None

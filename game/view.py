@@ -1,7 +1,8 @@
 """View layer for the Pong game.
 
-This module is responsible for rendering the current game state onto the screen.
-It does not modify game rules or state; it only draws what the model tells it.
+This module is responsible for drawing the current game state onto the screen.
+It intentionally contains no gameplay logic: it only renders the state provided by
+PongModel and the current game objects.
 """
 
 import pygame
@@ -15,7 +16,7 @@ ACCENT = (102, 214, 255)
 
 
 class PongView:
-    """Renders the game and the menu based on the current model state."""
+    """Renders the game board, HUD, menu, pause screen, and game-over overlay."""
 
     def __init__(self, screen: pygame.Surface) -> None:
         self.screen = screen
@@ -24,6 +25,7 @@ class PongView:
         self.tertiary_font = pygame.font.Font(None, 24)
 
     def render(self, game_model) -> None:
+        """Render the full scene based on the current state of the model."""
         self.screen.fill(BLACK)
         self.draw_center_divider()
         self.draw_paddles(game_model)
@@ -32,21 +34,27 @@ class PongView:
 
         if game_model.state == "menu":
             self.draw_menu(game_model)
+        elif game_model.state == "paused":
+            self.draw_pause_menu(game_model)
         elif game_model.state == "game_over":
             self.draw_game_over(game_model)
 
     def draw_center_divider(self) -> None:
+        """Draw the dashed center line between the player halves."""
         for y_position in range(0, SCREEN_HEIGHT, 20):
             pygame.draw.rect(self.screen, DARK, (SCREEN_WIDTH // 2 - 2, y_position, 4, 12))
 
     def draw_paddles(self, game_model) -> None:
+        """Render both paddles using their current color values."""
         pygame.draw.rect(self.screen, game_model.left_paddle.color, game_model.left_paddle.rect)
         pygame.draw.rect(self.screen, game_model.right_paddle.color, game_model.right_paddle.rect)
 
     def draw_ball(self, ball) -> None:
+        """Render the ball as an ellipse to emulate the classic Pong look."""
         pygame.draw.ellipse(self.screen, WHITE, ball.rect)
 
     def draw_score(self, game_model) -> None:
+        """Render the score in the center-top HUD area."""
         left_score_text = self.title_font.render(str(game_model.player_one_score), True, WHITE)
         right_score_text = self.title_font.render(str(game_model.player_two_score), True, WHITE)
 
@@ -54,6 +62,7 @@ class PongView:
         self.screen.blit(right_score_text, (SCREEN_WIDTH // 2 + 50, 18))
 
     def draw_menu(self, game_model) -> None:
+        """Draw the start menu including progression and color selection info."""
         title_surface = self.title_font.render("PONG", True, WHITE)
         self.screen.blit(title_surface, (SCREEN_WIDTH // 2 - title_surface.get_width() // 2, SCREEN_HEIGHT // 2 - 160))
 
@@ -81,7 +90,23 @@ class PongView:
         unlocked_text = self.tertiary_font.render(f"Unlocked: {unlocked_colors}", True, WHITE)
         self.screen.blit(unlocked_text, (SCREEN_WIDTH // 2 - unlocked_text.get_width() // 2, SCREEN_HEIGHT // 2 + 160))
 
+    def draw_pause_menu(self, game_model) -> None:
+        """Draw the pause overlay and give the player resume or menu choices."""
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((10, 10, 18, 180))
+        self.screen.blit(overlay, (0, 0))
+
+        pause_title = self.title_font.render("PAUSED", True, WHITE)
+        self.screen.blit(pause_title, (SCREEN_WIDTH // 2 - pause_title.get_width() // 2, SCREEN_HEIGHT // 2 - 80))
+
+        resume_text = self.secondary_font.render("Press P to resume", True, ACCENT)
+        menu_text = self.secondary_font.render("Press Esc to return to menu", True, WHITE)
+
+        self.screen.blit(resume_text, (SCREEN_WIDTH // 2 - resume_text.get_width() // 2, SCREEN_HEIGHT // 2 + 10))
+        self.screen.blit(menu_text, (SCREEN_WIDTH // 2 - menu_text.get_width() // 2, SCREEN_HEIGHT // 2 + 55))
+
     def draw_game_over(self, game_model) -> None:
+        """Draw the game-over overlay with winner and quick restart instructions."""
         if game_model.game_mode == "single":
             message = "CPU WINS" if game_model.winner_name == "CPU" else "YOU WIN"
             survival_time_text = self.secondary_font.render(

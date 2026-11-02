@@ -1,7 +1,8 @@
 """Controller layer for the Pong game.
 
 This module handles user input and orchestrates the interaction between the model
-and the view.
+and view layers. It is responsible for event routing, pause toggling, and the main
+frame loop.
 """
 
 import sys
@@ -14,7 +15,7 @@ from .view import PongView
 
 
 class PongController:
-    """The main controller for the game loop."""
+    """Coordinates the game loop and input handling."""
 
     def __init__(self) -> None:
         pygame.init()
@@ -25,6 +26,7 @@ class PongController:
         self.view = PongView(self.screen)
 
     def handle_events(self) -> bool:
+        """Process all window and keyboard events for the current frame."""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
@@ -33,14 +35,14 @@ class PongController:
                 continue
 
             if event.key == pygame.K_ESCAPE:
-                if self.model.state == GameState.PLAYING.value:
-                    self.model.state = GameState.MENU.value
-                    self.model.game_mode = None
-                elif self.model.state == GameState.GAME_OVER.value:
-                    self.model.state = GameState.MENU.value
-                    self.model.game_mode = None
+                if self.model.state in (GameState.PLAYING.value, GameState.PAUSED.value, GameState.GAME_OVER.value):
+                    self.model.return_to_menu()
                 elif self.model.state == GameState.MENU.value:
                     return False
+
+            if event.key == pygame.K_p:
+                if self.model.state in (GameState.PLAYING.value, GameState.PAUSED.value):
+                    self.model.toggle_pause()
 
             if self.model.state == GameState.MENU.value:
                 if event.key == pygame.K_1:
@@ -63,11 +65,13 @@ class PongController:
         return True
 
     def update(self, delta_time: float) -> None:
+        """Update the model only when the game is actively playing."""
         if self.model.state == GameState.PLAYING.value:
             key_state = pygame.key.get_pressed()
             self.model.update(delta_time, key_state)
 
     def run(self) -> None:
+        """Run the main application loop until the user quits."""
         while True:
             delta_time = self.clock.tick(60) / 1000.0
             should_continue = self.handle_events()

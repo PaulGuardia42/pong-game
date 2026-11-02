@@ -1,8 +1,9 @@
 """Shared configuration and constants for the Pong game.
 
-This module centralizes values that are used across the application so they are
-not repeated in multiple places. Keeping these values in one file makes the game
-much easier to tune and maintain.
+This module defines the values that are reused across the game, such as window
+size, paddle parameters, game state names, color selections, and progression
+thresholds. Centralizing them here keeps tuning and future refactors easier and
+reduces the risk of inconsistent values across the codebase.
 """
 
 from enum import Enum
@@ -12,17 +13,26 @@ from pathlib import Path
 
 
 class GameMode(str, Enum):
-    """Defines the supported match types."""
+    """Defines the supported game types.
+
+    Using an Enum instead of raw strings prevents typo-prone comparisons and makes
+    the game state more self-documenting as the project grows.
+    """
 
     SINGLE_PLAYER = "single"
     TWO_PLAYER = "two_player"
 
 
 class GameState(str, Enum):
-    """Defines the lifecycle states of the game."""
+    """Defines the lifecycle states for the game session.
+
+    The application can be in a menu, actively playing, paused, or in a game-over
+    screen. Explicit states make transitions clearer than loose string values.
+    """
 
     MENU = "menu"
     PLAYING = "playing"
+    PAUSED = "paused"
     GAME_OVER = "game_over"
 
 
@@ -50,7 +60,11 @@ PADDLE_UNLOCKS = {
 
 
 def get_save_directory() -> Path:
-    """Return the OS-specific directory where user progress is stored."""
+    """Return the OS-specific directory used to store user progress.
+
+    Saving user data under the OS app-data directory keeps project files clean and
+    follows platform-specific conventions for long-term local storage.
+    """
     if os.name == "nt":
         base_directory = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
     elif sys.platform == "darwin":
