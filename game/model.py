@@ -1,221 +1,199 @@
-"""Model layer for the Pong game.
+"""The Pong game model.
 
-This module contains the game data and rules, including the ball, paddles,
-score tracking, and the current game state. The model does not know anything
-about rendering or keyboard input; it only stores information and updates it
-according to game rules.
+This module contains the central game logic and rules. It owns the game state,
+score, paddle positions, CPU behavior, and progression updates.
 """
 
-import math
 import random
-from dataclasses import dataclass
 
 import pygame
 
-
-# Window dimensions used by the game world.
-WINDOW_WIDTH = 960
-WINDOW_HEIGHT = 540
-
-# Visual and collision sizing for the paddles and ball.
-PADDLE_WIDTH = 16
-PADDLE_HEIGHT = 110
-BALL_SIZE = 14
-
-
-@dataclass
-class Paddle:
-    """Represents one player's paddle.
-
-    The paddle is stored as a rectangle so collisions with the ball can be checked
-    using Pygame's collision API.
-    """
-
-    x: int
-    y: int
-    width: int = PADDLE_WIDTH
-    height: int = PADDLE_HEIGHT
-    color: tuple[int, int, int] = (255, 255, 255)
-    speed: float = 520.0
-
-    def __post_init__(self):
-        # Build the rectangle used for drawing and collision detection.
-        self.rect = pygame.Rect(self.x, self.y, self.width, self.height)
-
-    def move(self, direction: int, dt: float) -> None:
-        """Move the paddle up or down based on the direction value."""
-        self.rect.y += direction * self.speed * dt
-
-    def clamp(self) -> None:
-        """Keep the paddle inside the playable screen area."""
-        self.rect.y = max(0, min(self.rect.y, WINDOW_HEIGHT - self.rect.height))
+from .config import (
+    BALL_SIZE,
+    PADDLE_COLORS,
+    PADDLE_HEIGHT,
+    PADDLE_WIDTH,
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
+    GameMode,
+    GameState,
+)
+from .entities import Ball, Paddle
+from .progression_service import ProgressionService
 
 
-@dataclass
-class Ball:
-    """Represents the ball that bounces around the arena.
+def center_paddle_y() -> float:
+    return SCREEN_HEIGHT / 2 - PADDLE_HEIGHT / 2
 
-    It has a position, a velocity vector, and methods to update movement and
-    collisions with the paddles and walls.
-    """
 
-    x: int
-    y: int
-    size: int = BALL_SIZE
-    speed: float = 430.0
-    color: tuple[int, int, int] = (255, 255, 255)
-
-    def __post_init__(self):
-        # Create the ball's collision rectangle and starting velocity.
-        self.rect = pygame.Rect(self.x, self.y, self.size, self.size)
-        self.velocity = [self.speed, self.speed * 0.4]
-
-    def reset(self, direction: int) -> None:
-        """Center the ball and launch it toward the chosen side."""
-        self.rect.center = (WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2)
-        angle = random.uniform(-0.8, 0.8)
-        self.velocity = [direction * self.speed, math.sin(angle) * self.speed]
-
-    def update(self, dt: float, left_paddle: Paddle, right_paddle: Paddle, game: "PongModel") -> None:
-        """Move the ball and handle all collisions and scoring for the current frame."""
-        # Advance the ball using its current velocity and the frame delta time.
-        self.rect.x += self.velocity[0] * dt
-        self.rect.y += self.velocity[1] * dt
-
-        # Bounce when the ball hits the top or bottom wall.
-        if self.rect.top <= 0:
-            self.rect.top = 0
-            self.velocity[1] *= -1
-        elif self.rect.bottom >= WINDOW_HEIGHT:
-            self.rect.bottom = WINDOW_HEIGHT
-            self.velocity[1] *= -1
-
-        # Bounce when the ball collides with either paddle.
-        if self.rect.colliderect(left_paddle.rect):
-            self.rect.left = left_paddle.rect.right
-            self._bounce(left_paddle, 1)
-        elif self.rect.colliderect(right_paddle.rect):
-            self.rect.right = right_paddle.rect.left
-            self._bounce(right_paddle, -1)
-
-        # If the ball passes the left or right edge, award a point to the other side.
-        if self.rect.left <= 0:
-            game.right_score += 1
-            game.handle_score()
-        elif self.rect.right >= WINDOW_WIDTH:
-            game.left_score += 1
-            game.handle_score()
-
-    def _bounce(self, paddle: Paddle, direction: int) -> None:
-        """Adjust the ball's velocity when it hits a paddle.
-
-        The direction tells us whether the hit came from the left or right paddle,
-        and the offset changes the vertical angle based on where the hit occurred.
-        """
-        speed = max(abs(self.velocity[0]), 430.0) + 30.0
-
-        # offset is calculated to make angled rebounds feel natural.
-        offset = (self.rect.centery - paddle.rect.centery) / (paddle.rect.height / 2)
-        self.velocity[0] = direction * speed
-        self.velocity[1] = offset * 360.0
-
-        # Normalize the vector so the ball keeps roughly the same speed after each bounce.
-        length = math.hypot(self.velocity[0], self.velocity[1]) or 1.0
-        self.velocity[0] = (self.velocity[0] / length) * speed
-        self.velocity[1] = (self.velocity[1] / length) * speed
+def random_launch_direction() -> int:
+    return random.choice([-1, 1])
 
 
 class PongModel:
-    """Tracks the full game state and enforces the gameplay rules.
-
-    This class is the Model in the MVC pattern. It stores all of the data the game
-    needs to know, including paddle positions, the ball, score, and the current
-    mode (single-player or two-player).
-    """
+    """Stores the state and gameplay rules for a single game session."""
 
     WINNING_SCORE = 7
 
-    def __init__(self):
-        # Start in the menu until the player selects a mode.
-        self.state = "menu"
-        self.mode = None
-        self.left_score = 0
-        self.right_score = 0
-        self.winner = None
+    def __init__(self, progression_service: ProgressionService | None = None) -> None:
+        self.progression_service = progression_service or ProgressionService()
+        self.state = GameState.MENU.value
+        self.game_mode = None
+        self.player_one_score = 0
+        self.player_two_score = 0
+        self.winner_name = None
 
-        # Create the paddles and ball in their starting positions.
-        self.left_paddle = Paddle(24, WINDOW_HEIGHT // 2 - PADDLE_HEIGHT // 2, PADDLE_WIDTH, PADDLE_HEIGHT, (255, 255, 255))
-        self.right_paddle = Paddle(WINDOW_WIDTH - 24 - PADDLE_WIDTH, WINDOW_HEIGHT // 2 - PADDLE_HEIGHT // 2, PADDLE_WIDTH, PADDLE_HEIGHT, (255, 255, 255))
-        self.ball = Ball(WINDOW_WIDTH // 2 - BALL_SIZE // 2, WINDOW_HEIGHT // 2 - BALL_SIZE // 2)
+        self.high_score = 0.0
+        self.current_survival_time = 0.0
+        self.selected_color_name = "white"
 
-    def start_game(self, mode: str) -> None:
-        """Reset the game for a fresh match in the selected game mode."""
-        self.mode = mode
-        self.state = "playing"
-        self.left_score = 0
-        self.right_score = 0
-        self.winner = None
+        progress_data = self.progression_service.load_progress()
+        self.high_score = float(progress_data.get("high_score", 0.0))
+        self.unlocked_colors = set(progress_data.get("unlocked_colors", ["white"]))
+        self.selected_color_name = progress_data.get("selected_color", "white")
+        self.unlocked_colors = self.progression_service.refresh_unlocks(self.high_score)
 
-        # Ensure both paddles start centered before the next point begins.
-        self.left_paddle.rect.y = WINDOW_HEIGHT // 2 - PADDLE_HEIGHT // 2
-        self.right_paddle.rect.y = WINDOW_HEIGHT // 2 - PADDLE_HEIGHT // 2
+        if self.selected_color_name not in self.unlocked_colors:
+            self.selected_color_name = "white"
 
-        # Start the ball moving in a random direction to create a fair opening.
-        self.ball.reset(random.choice([-1, 1]))
+        self.left_paddle = Paddle(
+            24,
+            center_paddle_y(),
+            PADDLE_WIDTH,
+            PADDLE_HEIGHT,
+            PADDLE_COLORS[self.selected_color_name],
+        )
+        self.right_paddle = Paddle(
+            SCREEN_WIDTH - 24 - PADDLE_WIDTH,
+            center_paddle_y(),
+            PADDLE_WIDTH,
+            PADDLE_HEIGHT,
+            (255, 255, 255),
+        )
+        self.ball = Ball(SCREEN_WIDTH // 2 - BALL_SIZE // 2, SCREEN_HEIGHT // 2 - BALL_SIZE // 2)
+        self.apply_selected_color_to_player_paddle()
 
-    def handle_score(self) -> None:
-        """Check for a match winner or reset the ball after a point is scored."""
-        if self.left_score >= self.WINNING_SCORE or self.right_score >= self.WINNING_SCORE:
-            self.state = "game_over"
-            if self.mode == "single":
-                self.winner = "Player 1" if self.left_score > self.right_score else "CPU"
-            else:
-                self.winner = "Player 1" if self.left_score > self.right_score else "Player 2"
+    def get_unlocked_color_names(self) -> list[str]:
+        ordered_colors = []
+        for color_name in PADDLE_COLORS:
+            if color_name in self.unlocked_colors:
+                ordered_colors.append(color_name)
+        return ordered_colors
+
+    def apply_selected_color_to_player_paddle(self) -> None:
+        if self.selected_color_name not in self.unlocked_colors:
+            self.selected_color_name = "white"
+        self.left_paddle.color = PADDLE_COLORS[self.selected_color_name]
+
+    def cycle_selected_color(self, step: int = 1) -> None:
+        unlocked_colors = self.get_unlocked_color_names()
+        if not unlocked_colors:
             return
 
-        # Serve the ball to the side that lost the point so play continues smoothly.
-        if self.left_score > self.right_score:
+        current_index = unlocked_colors.index(self.selected_color_name)
+        next_index = (current_index + step) % len(unlocked_colors)
+        self.selected_color_name = unlocked_colors[next_index]
+        self.apply_selected_color_to_player_paddle()
+        self.progression_service.save_progress(
+            self.high_score,
+            self.unlocked_colors,
+            self.selected_color_name,
+        )
+
+    def start_game(self, mode: str | GameMode) -> None:
+        self.game_mode = mode.value if isinstance(mode, GameMode) else mode
+        self.state = GameState.PLAYING.value
+        self.player_one_score = 0
+        self.player_two_score = 0
+        self.winner_name = None
+        self.current_survival_time = 0.0
+
+        self.reset_paddles_to_center()
+        self.apply_selected_color_to_player_paddle()
+        self.ball.reset(random_launch_direction())
+
+    def reset_paddles_to_center(self) -> None:
+        self.left_paddle.reset_to_center()
+        self.right_paddle.reset_to_center()
+
+    def on_point_conceded(self) -> None:
+        if self.game_mode == GameMode.SINGLE_PLAYER.value:
+            self.current_survival_time = 0.0
+
+    def handle_score(self) -> None:
+        if self.player_one_score >= self.WINNING_SCORE or self.player_two_score >= self.WINNING_SCORE:
+            self.state = GameState.GAME_OVER.value
+            if self.game_mode == GameMode.SINGLE_PLAYER.value:
+                self.winner_name = "Player 1" if self.player_one_score > self.player_two_score else "CPU"
+            else:
+                self.winner_name = "Player 1" if self.player_one_score > self.player_two_score else "Player 2"
+            return
+
+        self.reset_ball_for_next_point()
+
+    def reset_ball_for_next_point(self) -> None:
+        if self.player_one_score > self.player_two_score:
             self.ball.reset(1)
         else:
             self.ball.reset(-1)
 
-    def update(self, dt: float, keys: pygame.key.ScancodeWrapper) -> None:
-        """Advance the game by one frame using the current keyboard state."""
-        if self.state != "playing":
+    def update(self, delta_time: float, key_state: pygame.key.ScancodeWrapper) -> None:
+        if self.state != GameState.PLAYING.value:
             return
 
-        # Move the left paddle with the W and S keys.
-        left_direction = 0
-        if keys[pygame.K_w]:
-            left_direction -= 1
-        if keys[pygame.K_s]:
-            left_direction += 1
-        self.left_paddle.move(left_direction, dt)
+        self.update_survival_progress(delta_time)
+        self.move_left_paddle(key_state, delta_time)
+
+        if self.game_mode == GameMode.SINGLE_PLAYER.value:
+            self.update_cpu_paddle(delta_time)
+        elif self.game_mode == GameMode.TWO_PLAYER.value:
+            self.move_right_paddle(key_state, delta_time)
+
+        self.ball.update(delta_time, self.left_paddle, self.right_paddle, self)
+
+    def update_survival_progress(self, delta_time: float) -> None:
+        if self.game_mode != GameMode.SINGLE_PLAYER.value:
+            return
+
+        self.current_survival_time += delta_time
+        previous_best_score = self.high_score
+        self.high_score = max(self.high_score, self.current_survival_time)
+
+        if self.high_score > previous_best_score:
+            self.unlocked_colors = self.progression_service.refresh_unlocks(self.high_score)
+            self.progression_service.save_progress(
+                self.high_score,
+                self.unlocked_colors,
+                self.selected_color_name,
+            )
+
+    def move_left_paddle(self, key_state: pygame.key.ScancodeWrapper, delta_time: float) -> None:
+        move_direction = 0
+        if key_state[pygame.K_w]:
+            move_direction -= 1
+        if key_state[pygame.K_s]:
+            move_direction += 1
+
+        self.left_paddle.move(move_direction, delta_time)
         self.left_paddle.clamp()
 
-        # The right paddle is either controlled by the CPU or by Player 2.
-        if self.mode == "single":
-            self._update_cpu(dt)
-        elif self.mode == "two_player":
-            right_direction = 0
-            if keys[pygame.K_UP]:
-                right_direction -= 1
-            if keys[pygame.K_DOWN]:
-                right_direction += 1
-            self.right_paddle.move(right_direction, dt)
-            self.right_paddle.clamp()
+    def move_right_paddle(self, key_state: pygame.key.ScancodeWrapper, delta_time: float) -> None:
+        move_direction = 0
+        if key_state[pygame.K_UP]:
+            move_direction -= 1
+        if key_state[pygame.K_DOWN]:
+            move_direction += 1
 
-        # After both paddles have moved, update the ball's position and collisions.
-        self.ball.update(dt, self.left_paddle, self.right_paddle, self)
+        self.right_paddle.move(move_direction, delta_time)
+        self.right_paddle.clamp()
 
-    def _update_cpu(self, dt: float) -> None:
-        """Move the right paddle toward the ball to simulate a simple CPU opponent."""
+    def update_cpu_paddle(self, delta_time: float) -> None:
         target_y = self.ball.rect.centery - self.right_paddle.rect.height / 2
 
-        # Only track the ball once it gets far enough into the field.
-        if self.ball.rect.x > WINDOW_WIDTH * 0.35:
+        if self.ball.rect.x > SCREEN_WIDTH * 0.35:
             if self.right_paddle.rect.centery < target_y:
-                self.right_paddle.move(1, dt)
+                self.right_paddle.move(1, delta_time)
             elif self.right_paddle.rect.centery > target_y:
-                self.right_paddle.move(-1, dt)
+                self.right_paddle.move(-1, delta_time)
+
         self.right_paddle.clamp()
