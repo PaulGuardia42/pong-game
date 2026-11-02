@@ -1,67 +1,90 @@
-import sys
+"""View layer for the Pong game.
+
+This module handles all rendering tasks. It is responsible only for drawing the
+current game state on the screen and does not contain gameplay rules.
+"""
 
 import pygame
 
-from .model import PongModel
-from .view import PongView
+from .model import WINDOW_HEIGHT, WINDOW_WIDTH
+
+# Colors used by the UI and game objects.
+WHITE = (255, 255, 255)
+BLACK = (10, 10, 18)
+DARK = (22, 22, 32)
+ACCENT = (102, 214, 255)
 
 
-class PongController:
-    def __init__(self):
-        pygame.init()
-        pygame.display.set_caption("Pong")
-        self.screen = pygame.display.set_mode((960, 540))
-        self.clock = pygame.time.Clock()
-        self.model = PongModel()
-        self.view = PongView(self.screen)
+class PongView:
+    """Responsible for drawing the current state of the model to the screen."""
 
-    def handle_events(self) -> bool:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                return False
+    def __init__(self, screen: pygame.Surface):
+        # Keep a reference to the screen so we can draw shapes and text onto it.
+        self.screen = screen
 
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    if self.model.state == "playing":
-                        self.model.state = "menu"
-                        self.model.mode = None
-                    elif self.model.state == "game_over":
-                        self.model.state = "menu"
-                        self.model.mode = None
-                    elif self.model.state == "menu":
-                        return False
+        # Font objects are created once for efficiency and reuse.
+        self.font = pygame.font.Font(None, 72)
+        self.small_font = pygame.font.Font(None, 36)
+        self.tiny_font = pygame.font.Font(None, 24)
 
-                if self.model.state == "menu":
-                    if event.key == pygame.K_1:
-                        self.model.start_game("single")
-                    elif event.key == pygame.K_2:
-                        self.model.start_game("two_player")
-                    elif event.key == pygame.K_q:
-                        return False
+    def render(self, model) -> None:
+        """Render the complete game screen based on the current model state."""
+        self.screen.fill(BLACK)
 
-                elif self.model.state == "game_over":
-                    if event.key in (pygame.K_RETURN, pygame.K_SPACE):
-                        self.model.state = "menu"
-                    elif event.key == pygame.K_1:
-                        self.model.start_game("single")
-                    elif event.key == pygame.K_2:
-                        self.model.start_game("two_player")
+        # Draw the center divider line.
+        for y in range(0, WINDOW_HEIGHT, 20):
+            pygame.draw.rect(self.screen, DARK, (WINDOW_WIDTH // 2 - 2, y, 4, 12))
 
-        return True
+        # Draw paddles and ball.
+        self._draw_paddle(model.left_paddle)
+        self._draw_paddle(model.right_paddle)
+        self._draw_ball(model.ball)
 
-    def update(self, dt: float) -> None:
-        if self.model.state == "playing":
-            keys = pygame.key.get_pressed()
-            self.model.update(dt, keys)
+        # Display the score at the top of the screen.
+        left_text = self.font.render(str(model.left_score), True, WHITE)
+        right_text = self.font.render(str(model.right_score), True, WHITE)
+        self.screen.blit(left_text, (WINDOW_WIDTH // 2 - 90, 18))
+        self.screen.blit(right_text, (WINDOW_WIDTH // 2 + 50, 18))
 
-    def run(self) -> None:
-        while True:
-            dt = self.clock.tick(60) / 1000.0
-            running = self.handle_events()
-            if not running:
-                pygame.quit()
-                sys.exit()
+        # Switch UI based on current game state.
+        if model.state == "menu":
+            self.draw_menu()
+        elif model.state == "game_over":
+            self.draw_game_over(model)
 
-            self.update(dt)
-            self.view.render(self.model)
-            pygame.display.flip()
+    def _draw_paddle(self, paddle) -> None:
+        """Draw one paddle using its rectangle."""
+        pygame.draw.rect(self.screen, paddle.color, paddle.rect)
+
+    def _draw_ball(self, ball) -> None:
+        """Draw the ball using its rectangle. A circle is used for the classic Pong feel."""
+        pygame.draw.ellipse(self.screen, WHITE, ball.rect)
+
+    def draw_menu(self) -> None:
+        """Show the start screen with mode selection instructions."""
+        title = self.font.render("PONG", True, WHITE)
+        self.screen.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, WINDOW_HEIGHT // 2 - 110))
+
+        option1 = self.small_font.render("Press 1 for 1 Player (vs CPU)", True, ACCENT)
+        option2 = self.small_font.render("Press 2 for 2 Players (same keyboard)", True, ACCENT)
+        prompt = self.small_font.render("Esc to quit", True, WHITE)
+
+        self.screen.blit(option1, (WINDOW_WIDTH // 2 - option1.get_width() // 2, WINDOW_HEIGHT // 2 - 10))
+        self.screen.blit(option2, (WINDOW_WIDTH // 2 - option2.get_width() // 2, WINDOW_HEIGHT // 2 + 40))
+        self.screen.blit(prompt, (WINDOW_WIDTH // 2 - prompt.get_width() // 2, WINDOW_HEIGHT // 2 + 90))
+
+    def draw_game_over(self, model) -> None:
+        """Display the winner and offer a quick way to return to the menu."""
+        if model.mode == "single":
+            message = "CPU WINS" if model.winner == "CPU" else "YOU WIN"
+        else:
+            message = f"{model.winner} WINS"
+
+        winner_text = self.font.render(message, True, WHITE)
+        self.screen.blit(winner_text, (WINDOW_WIDTH // 2 - winner_text.get_width() // 2, WINDOW_HEIGHT // 2 - 60))
+
+        prompt = self.small_font.render("Press Enter or Space to return to menu", True, ACCENT)
+        self.screen.blit(prompt, (WINDOW_WIDTH // 2 - prompt.get_width() // 2, WINDOW_HEIGHT // 2 + 30))
+
+        controls = self.tiny_font.render("1 = 1 Player, 2 = 2 Players", True, WHITE)
+        self.screen.blit(controls, (WINDOW_WIDTH // 2 - controls.get_width() // 2, WINDOW_HEIGHT // 2 + 75))
