@@ -66,7 +66,7 @@ class PongView:
         self.screen.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, WINDOW_HEIGHT // 2 - 160))
 
         high_score = self.small_font.render(f"Best survival: {model.high_score:.1f}s", True, ACCENT)
-        self.screen.blit(high_score, (WINDOW_WIDTH // 2 - high_score.get_width() // 2, HEIGHT // 2 - 90))
+        self.screen.blit(high_score, (WINDOW_WIDTH // 2 - high_score.get_width() // 2, WINDOW_HEIGHT // 2 - 90))
 
         color_name = model.selected_color_name.title()
         color_text = self.small_font.render(f"Selected paddle: {color_name}", True, WHITE)

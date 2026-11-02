@@ -8,7 +8,9 @@ according to game rules.
 
 import json
 import math
+import os
 import random
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -24,7 +26,7 @@ PADDLE_WIDTH = 16
 PADDLE_HEIGHT = 110
 BALL_SIZE = 14
 
-# A list of available paddle colors and the survival thresholds needed to unlock them.
+# Paddle colors and the survival thresholds required to unlock them.
 PADDLE_COLORS = {
     "white": (255, 255, 255),
     "cyan": (102, 214, 255),
@@ -41,7 +43,22 @@ PADDLE_UNLOCKS = {
     "purple": 90.0,
 }
 
-PROGRESS_FILE = Path(__file__).resolve().parent.parent / "pong_progress.json"
+
+def get_save_directory() -> Path:
+    """Return the OS-specific folder used to store user progress for this game."""
+    if os.name == "nt":
+        base_dir = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+    elif sys.platform == "darwin":
+        base_dir = Path.home() / "Library" / "Application Support"
+    else:
+        base_dir = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+
+    app_dir = base_dir / "pong-game"
+    app_dir.mkdir(parents=True, exist_ok=True)
+    return app_dir
+
+
+PROGRESS_FILE = get_save_directory() / "pong_progress.json"
 
 
 @dataclass
@@ -180,7 +197,7 @@ class PongModel:
         self._sync_selected_color_to_paddle()
 
     def _load_progress(self) -> None:
-        """Load unlocked colors and best survival time from the save file if available."""
+        """Load the player's saved high score and unlocked colors from the save file."""
         try:
             with PROGRESS_FILE.open("r", encoding="utf-8") as save_file:
                 data = json.load(save_file)
@@ -196,17 +213,18 @@ class PongModel:
             self.selected_color_name = "white"
 
     def _save_progress(self) -> None:
-        """Persist best high score, unlocked colors, and selected color to disk."""
+        """Persist the best survival score and paddle progression to the disk."""
         payload = {
             "high_score": round(self.high_score, 1),
             "unlocked_colors": sorted(self.unlocked_colors),
             "selected_color": self.selected_color_name,
         }
+
         with PROGRESS_FILE.open("w", encoding="utf-8") as save_file:
             json.dump(payload, save_file, indent=2)
 
     def get_unlocked_color_names(self) -> list[str]:
-        """Return the available paddle colors in the order they are unlocked."""
+        """Return the unlocked colors in order from the available palette."""
         ordered = []
         for name in PADDLE_COLORS:
             if name in self.unlocked_colors:
@@ -214,13 +232,13 @@ class PongModel:
         return ordered
 
     def _update_unlocked_colors(self) -> None:
-        """Unlock paddle colors based on the player's saved high-score progress."""
-        for color_name, unlock_threshold in PADDLE_UNLOCKS.items():
-            if self.high_score >= unlock_threshold:
+        """Unlock paddle colors based on the player's best survival time."""
+        for color_name, threshold in PADDLE_UNLOCKS.items():
+            if self.high_score >= threshold:
                 self.unlocked_colors.add(color_name)
 
     def _sync_selected_color_to_paddle(self) -> None:
-        """Apply the currently selected color to the player's paddle if it is unlocked."""
+        """Apply the selected paddle color to the player's paddle."""
         if self.selected_color_name not in self.unlocked_colors:
             self.selected_color_name = "white"
         self.left_paddle.color = PADDLE_COLORS[self.selected_color_name]
@@ -284,9 +302,9 @@ class PongModel:
         # has not conceded a point. This is the value used for the high score.
         if self.mode == "single":
             self.current_survival_time += dt
-            previous_best = self.high_score
+            previous_high = self.high_score
             self.high_score = max(self.high_score, self.current_survival_time)
-            if self.high_score > previous_best:
+            if self.high_score > previous_high:
                 self._update_unlocked_colors()
                 self._save_progress()
 
